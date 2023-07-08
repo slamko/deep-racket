@@ -32,7 +32,7 @@
    '(1 1 0)
    '(0 1 1)))
 
-(define train-data and-train-data)
+(define train-data xor-train-data)
 
 (struct neuron (w1 w2 b))
 
@@ -108,11 +108,9 @@
                      (+ (neuron-b n) dstep)))
 
         (start-cost (cost data network))
-        (cost-w1+ (cost data
-                        (struct-copy nxor network
-                                     [a neuron-w1+])))
-        (cost-w2+ (cost data neuron-w2+))
-        (cost-b+ (cost data neuron-b+))
+        (cost-w1+ (cost data (insert-neuron-f neuron-w1+)))
+        (cost-w2+ (cost data (insert-neuron-f neuron-w2+)))
+        (cost-b+ (cost data (insert-neuron-f neuron-b+)))
 
         (dw1 (/ (- cost-w1+ start-cost) dstep))
         (dw2 (/ (- cost-w2+ start-cost) dstep))
@@ -125,117 +123,26 @@
 
 (define (train-net data network rate)
   (nxor
-   (let* (
-          (dstep 1e-3)
-          (n (nxor-a network))
-          (neuron-w1+ (neuron
-                       (+ (neuron-w1 n) dstep)
-                       (neuron-w2 n)
-                       (neuron-b n)))
+   (train-neuron data network
+                 (nxor-a network)
+                 (lambda (neuron)
+                   (struct-copy nxor network
+                                [a neuron]))
+                 rate)
 
-          (neuron-w2+ (neuron
-                       (neuron-w1 n)
-                       (+ (neuron-w2 n) dstep)
-                       (neuron-b n)))
-          
-          (neuron-b+ (neuron
-                      (neuron-w1 n)
-                      (neuron-w2 n)
-                      (+ (neuron-b n) dstep)))
-          
-          (start-cost (cost data network))
-          (cost-w1+ (cost data (struct-copy nxor network
-                                            [a neuron-w1+]
-                                            )))
-          (cost-w2+ (cost data (struct-copy nxor network
-                                            [a neuron-w2+]
-                                            )))
-          (cost-b+ (cost data (struct-copy nxor network
-                                           [a neuron-b+]
-                                           )))
-          
-          (dw1 (/ (- cost-w1+ start-cost) dstep))
-          (dw2 (/ (- cost-w2+ start-cost) dstep))
-          (db  (/ (- cost-b+ start-cost) dstep)))
-     
-     (neuron (- (neuron-w1 n) (* dw1 rate))
-             (- (neuron-w2 n) (* dw2 rate))
-             (- (neuron-b n) (* db rate)))
-     )
-   (let* (
-          (dstep 1e-3)
-          (n (nxor-b network))
-          (neuron-w1+ (neuron
-                       (+ (neuron-w1 n) dstep)
-                       (neuron-w2 n)
-                       (neuron-b n)))
+   (train-neuron data network
+                 (nxor-b network)
+                 (lambda (neuron)
+                   (struct-copy nxor network
+                                [b neuron]))
+                 rate)
 
-          (neuron-w2+ (neuron
-                       (neuron-w1 n)
-                       (+ (neuron-w2 n) dstep)
-                       (neuron-b n)))
-          
-          (neuron-b+ (neuron
-                      (neuron-w1 n)
-                      (neuron-w2 n)
-                      (+ (neuron-b n) dstep)))
-          
-          (start-cost (cost data network))
-          (cost-w1+ (cost data (struct-copy nxor network
-                                            [b neuron-w1+]
-                                            )))
-          (cost-w2+ (cost data (struct-copy nxor network
-                                            [b neuron-w2+]
-                                            )))
-          (cost-b+ (cost data (struct-copy nxor network
-                                           [b neuron-b+]
-                                           )))
-          
-          (dw1 (/ (- cost-w1+ start-cost) dstep))
-          (dw2 (/ (- cost-w2+ start-cost) dstep))
-          (db  (/ (- cost-b+ start-cost) dstep)))
-     
-     (neuron (- (neuron-w1 n) (* dw1 rate))
-             (- (neuron-w2 n) (* dw2 rate))
-             (- (neuron-b n) (* db rate)))
-     )
-   (let* (
-          (dstep 1e-3)
-          (n (nxor-y network))
-          (neuron-w1+ (neuron
-                       (+ (neuron-w1 n) dstep)
-                       (neuron-w2 n)
-                       (neuron-b n)))
-
-          (neuron-w2+ (neuron
-                       (neuron-w1 n)
-                       (+ (neuron-w2 n) dstep)
-                       (neuron-b n)))
-          
-          (neuron-b+ (neuron
-                      (neuron-w1 n)
-                      (neuron-w2 n)
-                      (+ (neuron-b n) dstep)))
-          
-          (start-cost (cost data network))
-          (cost-w1+ (cost data (struct-copy nxor network
-                                            [y neuron-w1+]
-                                            )))
-          (cost-w2+ (cost data (struct-copy nxor network
-                                            [y neuron-w2+]
-                                            )))
-          (cost-b+ (cost data (struct-copy nxor network
-                                           [y neuron-b+]
-                                           )))
-          
-          (dw1 (/ (- cost-w1+ start-cost) dstep))
-          (dw2 (/ (- cost-w2+ start-cost) dstep))
-          (db  (/ (- cost-b+ start-cost) dstep)))
-     
-     (neuron (- (neuron-w1 n) (* dw1 rate))
-             (- (neuron-w2 n) (* dw2 rate))
-             (- (neuron-b n) (* db rate)))
-     )
+   (train-neuron data network
+                 (nxor-y network)
+                 (lambda (neuron)
+                   (struct-copy nxor network
+                                [y neuron]))
+                 rate)
    ))
 
 (define (perform data nn)
