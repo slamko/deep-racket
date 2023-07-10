@@ -1,6 +1,7 @@
 #!/usr/bin/env racket
 
-#lang racket
+#lang typed/racket
+;; #lang racket
 
 (require math)
 
@@ -34,9 +35,9 @@
 
 (define train-data xor-train-data)
 
-(struct neuron (w1 w2 b))
+(struct neuron ([w1 : Real] [w2 : Real] [b : Real]))
 
-(struct nxor (a b y))
+(struct nxor ([a : neuron] [b : neuron] [y : neuron]))
 
 (define or-neuron
   (neuron (random) (random) (random)))
@@ -51,9 +52,13 @@
 
 (define train-rate 1e-1)
 
+(define-type Data (Listof (Listof Real)))
+
+(: sigmoid (-> Real Real))
 (define (sigmoid x)
   (/ 1 (+ 1 (exp (- x)))))
 
+(: neuron-think (-> neuron (Listof Real) Real))
 (define (neuron-think n input)
   (sigmoid
    (+
@@ -62,6 +67,7 @@
     (neuron-b n)
     )))
 
+(: xor-think (-> nxor (Listof Real) Real))
 (define (xor-think xor-nn input)
   (neuron-think
    (nxor-y xor-nn)
@@ -71,6 +77,7 @@
     (neuron-think 
      (nxor-b xor-nn) input))))  
 
+(: xor-diff (-> (Listof Real) nxor Real))
 (define (xor-diff data-set nn)
   (let* ((yn (xor-think nn (cdr data-set)))
         (y (car data-set))
@@ -78,7 +85,10 @@
 
     (* d d)))
 
+(: cost (-> Data nxor Real))
 (define (cost data-list network)
+
+  (: cost-rec (-> Data Real nxor Real))
   (define (cost-rec data err network)
     (match data
       ['() err]
@@ -88,6 +98,9 @@
       ))
 
   (cost-rec data-list 0 network))
+
+(: train-neuron
+   (-> Data nxor neuron (-> neuron nxor) Real neuron))
 
 (define (train-neuron data network n insert-neuron-f rate)
   (let* (
@@ -121,30 +134,32 @@
             (- (neuron-b n) (* db rate)))
   ))
 
+(: train-net (-> Data nxor Real nxor))
 (define (train-net data network rate)
   (nxor
    (train-neuron data network
                  (nxor-a network)
-                 (lambda (neuron)
+                 (lambda ([neuron : neuron]) : nxor
                    (struct-copy nxor network
                                 [a neuron]))
                  rate)
 
    (train-neuron data network
                  (nxor-b network)
-                 (lambda (neuron)
+                 (lambda ([neuron : neuron]) : nxor
                    (struct-copy nxor network
                                 [b neuron]))
                  rate)
 
    (train-neuron data network
                  (nxor-y network)
-                 (lambda (neuron)
+                 (lambda ([n : neuron]) : nxor
                    (struct-copy nxor network
-                                [y neuron]))
+                                [y n]))
                  rate)
    ))
 
+(: perform (-> Data nxor String))
 (define (perform data nn)
   (match data
     ['() ""]
@@ -156,7 +171,11 @@
      ]
     ))
    
+
+(: learn (-> Data nxor))
 (define (learn data)
+
+  (: learn-rec (-> Data Real nxor Number nxor))
   (define (learn-rec data err nn iter)
     (match iter
       [j
@@ -174,10 +193,12 @@
 
 (define main
   (begin
+    (printf "Before training: \n")
     (perform train-data neural-network)
     (printf "-----------------------------------------\n")
     (let ((nn (learn train-data)))
+      (printf "After training: \n")
       (perform train-data nn)
-      (printf "~a \n" (cost train-data nn)))))
+      (printf "\nModel error = ~a \n" (cost train-data nn)))))
 
 main
