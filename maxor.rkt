@@ -32,7 +32,11 @@
 
 (define input-data xor-input)
 
+(define out-data xor-output)
+
 (define train-rate 1e-1)
+
+(define dstep 1e-1)
 
 (define-type Data (Listof (Listof Real)))
 
@@ -53,8 +57,6 @@
        (forward a (cdr wl) (cdr bl)))
      ]
     ))
-
-;; (define (cost input 
 
 (: make-nn (-> (Listof Integer) neural-network))
 (define (make-nn arch)
@@ -102,12 +104,44 @@
 
   (cost-rec nn input output 0))
 
-;; (define (learn nn in out)
-  ;; )
+(: mat-step (-> Mat Real (Listof Mat)))
+(define (mat-step m dstep)
+  (let ((matl (matrix->list m)))
+
+    (: step-rec
+     (-> (Listof Real) (Listof (Listof Real)) Integer (Listof (Listof Real))))
+    (define (step-rec ml acc iter)
+      (match iter
+        [-1 acc]
+        [i
+         (let ((new-ml
+                 (list-set ml i (+ (list-ref ml i) dstep))))
+           (step-rec ml (cons new-ml acc) (- i 1))
+           )
+         ]
+        ))
+
+    (map
+     (lambda ([ml : (Listof Real)]) : Mat
+       (list->matrix (matrix-num-rows m) (matrix-num-cols m) ml))
+     (step-rec matl '() (- (* (matrix-num-rows m) (matrix-num-cols m)) 1)))))
+
+(: mstep (-> Mat (Listof Mat)))
+(define (mstep m)
+  (mat-step m dstep))
+
+(define (finite-diff wl bl )
+  (map mstep wl))
+
+(: learn (-> neural-network (Listof Mat) (Listof Real) (Listof Mat)))
+(define (learn nn in out)
+  ;; (match (
+  (mat-step (car (neural-network-wl nn)) 1e-3)
+  )
     
   
 (define main
   (let ((nn (make-nn nn-arch)))
-    (cost nn xor-input xor-output)))
+    (learn nn input-data out-data)))
 
 main
