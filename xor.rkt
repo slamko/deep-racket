@@ -4,6 +4,7 @@
 ;; #lang racket
 
 (require math)
+(require math/matrix)
 
 (define or-train-data
   (list
@@ -33,6 +34,7 @@
    '(1 1 0)
    '(0 1 1)))
 
+
 (define train-data xor-train-data)
 
 (struct neuron ([w1 : Real] [w2 : Real] [b : Real]))
@@ -51,6 +53,7 @@
 (define neural-network (nxor or-neuron nand-neuron and-neuron))
 
 (define train-rate 1e-1)
+
 
 (define-type Data (Listof (Listof Real)))
 
