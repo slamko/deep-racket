@@ -104,39 +104,62 @@
 
   (cost-rec nn input output 0))
 
-(: mat-step (-> Mat Real (Listof Mat)))
-(define (mat-step m dstep)
-  (let ((matl (matrix->list m)))
+(: list-back->mat (-> Mat (Listof Real) Mat))
+(define (list-back->mat mat ls) 
+  (list->matrix (matrix-num-rows mat) (matrix-num-cols mat) ls))
 
-    (: step-rec
-     (-> (Listof Real) (Listof (Listof Real)) Integer (Listof (Listof Real))))
-    (define (step-rec ml acc iter)
-      (match iter
-        [-1 acc]
-        [i
-         (let ((new-ml
-                 (list-set ml i (+ (list-ref ml i) dstep))))
-           (step-rec ml (cons new-ml acc) (- i 1))
-           )
-         ]
-        ))
+(: mat-size (-> Mat Integer))
+(define (mat-size m)
+  (* (matrix-num-cols m) (matrix-num-rows m)))
 
-    (map
-     (lambda ([ml : (Listof Real)]) : Mat
-       (list->matrix (matrix-num-rows m) (matrix-num-cols m) ml))
-     (step-rec matl '() (- (* (matrix-num-rows m) (matrix-num-cols m)) 1)))))
+(: mat-step (-> (Listof Mat) Real (Listof (Listof Mat))))
+(define (mat-step mat-list dstep)
 
-(: mstep (-> Mat (Listof Mat)))
-(define (mstep m)
-  (mat-step m dstep))
+  (: step-rec
+     (-> (Listof Mat) (Listof (Listof Mat)) Integer (Listof (Listof Mat))))
+  (define (step-rec lm ml-acc mat-iter)
+    (match mat-iter
+      [-1 ml-acc]
+      [_
+       (let* ((cur-m (list-ref lm mat-iter))
+              (lr (matrix->list cur-m)))
+         
+         (: step-one-mat
+            (-> (Listof Real) (Listof (Listof Mat)) Integer
+                (Listof (Listof Mat))))
+         (define (step-one-mat ml acc iter)
+           (match iter
+             [-1 acc]
+             [i
+              (let* ((new-lr
+                      (list-set ml i (+ (list-ref ml i) dstep)))
+                     (new-ml
+                      (list-set mat-list mat-iter
+                                (list-back->mat cur-m new-lr))))
+                (step-one-mat ml (cons new-ml acc) (- i 1)))
+              ]
+             ))
+         
+           (step-rec
+            lm
+            (append (step-one-mat lr '() (- (mat-size cur-m) 1)) ml-acc)
+            (- mat-iter 1)))
+       ]
+      ))
 
-(define (finite-diff wl bl )
-  (map mstep wl))
+  (step-rec mat-list '() (- (length mat-list) 1)))
 
-(: learn (-> neural-network (Listof Mat) (Listof Real) (Listof Mat)))
+;; (: mstep (-> Mat (Listof Mat)))
+;; (define (mstep m)
+  ;; (mat-step m dstep))
+
+;; (: finite-diff (-> (Listof 
+;; (define (finite-diff wl bl)
+  ;; (map mstep wl))
+
+(: learn (-> neural-network (Listof Mat) (Listof Real) (Listof (Listof Mat))))
 (define (learn nn in out)
-  ;; (match (
-  (mat-step (car (neural-network-wl nn)) 1e-3)
+  (mat-step (neural-network-wl nn) 1)
   )
     
   
