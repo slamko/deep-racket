@@ -52,7 +52,7 @@
 
 (define out-data xor-output)
 
-(define train-rate 1e-1)
+(define train-rate 1e-2)
 
 (define dstep 1e-1)
 
@@ -108,19 +108,19 @@
   (let ((rev-arch (reverse arch)))
     (neural-network (make-wl-rec rev-arch '()) (make-bl-rec rev-arch '()))))
 
-(: cost (-> neural-network (Listof Mat) (Listof Real) Real))
+(: cost (-> neural-network (Listof Mat) (Listof Mat) Real))
 (define (cost nn input output)
 
-  (: cost-rec (-> neural-network (Listof Mat) (Listof Real) Real Real))
+  (: cost-rec (-> neural-network (Listof Mat) (Listof Mat) Real Real))
   (define (cost-rec nn input output err)
   (match input
     ['() err]
     [l
-     (let* ((nn-y (forward (car input)
+     (let* ((nn-y (car (forward (car input)
                              (neural-network-wl nn)
-                             (neural-network-bl nn)))
+                             (neural-network-bl nn))))
            (y (car output))
-           (diff (- y nn-y)))
+           (diff (apply + (matrix->list (matrix- nn-y y)))))
        (cost-rec nn (cdr input) (cdr output) (+ err (* diff diff))))
      ]
     ))
@@ -324,7 +324,19 @@
   |#
   
 (define main
-  (let ((nn (make-nn nn-arch)))
-    (dcost nn input-data out-data)))
+  (let* ((nn (make-nn nn-arch))
+         (trained-wl (map matrix- (neural-network-wl nn)
+                          (reverse (map (lambda ([m : Mat]) : Mat
+                                 (matrix-scale m train-rate))
+                               (dcost nn input-data out-data)
+                                        )))))
+    (begin
+      (printf "~a\n" (cost nn input-data out-data))
+      (printf "~a\n" (cost
+                      (neural-network
+                       trained-wl
+                       (neural-network-bl nn)
+                       )
+                      input-data out-data)))))
 
 main
