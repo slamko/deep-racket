@@ -10,13 +10,13 @@
 (define-type Weight Real)
 (define-type Bias Real)
 
-(: xor-output (Listof Real))
+(: xor-output (Listof Mat))
 (define xor-output
   (list
-   '(0)
-   '(1)
-   '(1)
-   '(0)))
+    (matrix [[0]])
+    (matrix [[1]])
+    (matrix [[1]])
+    (matrix [[0]])))
 
 (: xor-input (Listof Mat))
 (define xor-input
@@ -33,6 +33,18 @@
   (
    [wl : (Listof Mat)]
    [bl : (Listof Mat)]))
+
+(struct backprop-layer
+  (
+   [w-mat : (Matrix Weight)]
+   [pd-prev : (Listof Real)]
+   ))
+
+(struct backprop-neuron
+  (
+   [w-list : (Listof Weight)]
+   [pd-prev : (Listof Real)]
+   ))
 
 ;; (define train-data xor-train-data)
 
@@ -116,6 +128,65 @@
   (cost-rec nn input output 0))
 |#
 
+(:dcost-mat
+ (-> (Listof Real) Real (Listof Real) Integer
+     backprop-neuron))
+(define (dcost-neuron w-acc-l diff-i ai ai-prev-l
+                      pd-prev-list-acc i)
+  (match i
+    [-1 (backprop-neuron w-acc-l pd-prev-list-acc)]
+    [_
+     (let ((ai-prev (list-ref ai-prev-l i))
+           (wi-pd (* 2 diff-i ai (- 1 ai) ai-prev))
+           (last-pd-ai-prev (list-ref pd-prev-list-acc i))
+           (pd-ai-prev (* 2 diff-i ai (- 1 ai)
+                          (list-ref w-acc-l i)))
+           (wlist-upd (list-set w-acc-l i wi-pd))
+           )
+       
+       (dcost-neuron
+        w-acc-l
+        diff-i
+        ai
+        ai-prev-l
+        (list-set pd-prev-list-acc i
+                  (+ pd-ai-prev last-pd-ai-prev))
+        (- i 1)))
+     ]
+    ))
+
+
+(: dcost-layer (-> Integer Integer (Listof Weight) (Matrix Weight)
+                   (Listof Real) (Listof Real) (Listof Real)
+                   (Listof Real) backprop-layer))
+
+(define (dcost-layer w-row w-col w-l w-acc-mat next-diff-l ai-l
+                     diff-l ai-prev-l)
+  (match ai-l
+    ['() (backprop-layer
+          w-acc-mat
+          next-diff-l)]
+    [_
+     
+     (let* ((ai (car ai-l))
+            (diff (car diff-l))
+            (neuron-bp
+             (dcost-neuron w-l diff ai ai-prev-l
+                           (next-diff-l)
+                           (- (length w-l) 1)))
+            (neuron-dcost (backprop-neuron-w-list neuron-bp))
+            (neuron-diff-l (backprop-neuron-pd-prev neuron-bp))
+            (n-dcost-mat (list->matrix w-row w-col neuron-dcost)))
+       
+       (dcost-layer w-row w-col w-l
+                    (matrix+ n-dcost-mat w-acc-mat)
+                    neuron-diff-l
+                    (cdr ai-l) (cdr diff-l) ai-prev-l))
+     ]
+    ))
+
+
+
 (: dcost (-> neural-network (Listof Mat) (Listof Real) Real))
 (define (dcost nn input output)
 
@@ -130,58 +201,26 @@
                              (neural-network-bl nn)))
             (y (car output)))
 
-       (define (dcost-nn forward-list wmat-list wgrad-mat-list-acc)
+       (define (dcost-nn forward-list wmat-list wgrad-mat-list-acc diff-l)
          (match forward-list
            ['() wgrad-mat-list-acc]
            [l
-
-            (: dcost-layer (-> Integer Integer (Listof Weight) (Matrix Weight)
-                               (Listof Real) (Listof Real) (Listof Real)
-                               (Matrix Weight)))
-            (define (dcost-layer w-row w-col w-l w-acc-mat ai-l
-                                 diff-l ai-prev-l)
-              (match ai-l
-                ['() w-acc-mat]
-                [_
-
-                 (:dcost-mat
-                  (-> (Listof Real) Real (Listof Real) Integer))
-                 (define (dcost-neuron w-acc-l diff-i ai ai-prev-l i)
-                   (match i
-                     [-1 wlist-acc]
-                     [_
-                      (let ((ai-prev (list-ref ai-prev-l i))
-                            (wi-pd (* 2 diff-i ai (- 1 ai) ai-prev))
-                            (wlist-upd (list-set w-acc-l i wi-pd)))
-                        (dcost-neuron w-acc-l diff-i ai ai-prev-l (- i 1)))
-                      ]
-                     ))
-
-                 (let* ((ai (car ai-l))
-                        (diff (car diff-l))
-                        (neuron-dcost
-                         (dcost-neuron w-l diff ai ai-prev-l
-                                       (- (length w-l) 1)))
-                        (n-dcost-mat (list->matrix w-row w-col neuron-dcost)))
-                   
-                   (dcost-layer w-row w-col w-l
-                                (matrix+ n-dcost-mat w-acc-mat)
-                                (cdr ai-l) (cdr diff-l) ai-prev-l))
-                 ]
-                ))
-
-            (let ((w-rows (matrix-num-rows wmat-list))
-                  (w-cols (matrix-num-cols wmat-list))
-                  (cur-wlist (matrix->list wmat-list)))
-              (dcost-layer w-rows w-cols cur-wlist
-                           (make-matrix w-rows w-cols 0)
-                           (car forward-list)
-                           
-                               
-            
-            
-                   
-                       
+            (let* (
+                   (cur-wmat (car wmat-list))
+                   (w-rows (matrix-num-rows cur-wmat))
+                   (w-cols (matrix-num-cols cur-wmat))
+                   (cur-wlist (matrix->list cur-wmat))
+                   (layer-bp
+                    (dcost-layer w-rows w-cols cur-wlist
+                                 (make-matrix w-rows w-cols 0)
+                                 (make-list w-rows 0)
+                                 (car forward-list)
+                                 diff-l
+                                 (cdar forward-list)))
+                   (bp-next-diff-l (backprop-layer-pd-prev layer-bp)))
+              
+              (dcost-nn (cdr forward-list) (cdr wmat-list) 
+                        bp-next-diff-l)
 
        (dcost-rec nn (cdr input) (cdr output) ))
      ]
