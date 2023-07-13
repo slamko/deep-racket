@@ -108,6 +108,14 @@
   (let ((rev-arch (reverse arch)))
     (neural-network (make-wl-rec rev-arch '()) (make-bl-rec rev-arch '()))))
 
+(: list-back->mat (-> Mat (Listof Real) Mat))
+(define (list-back->mat mat ls) 
+  (list->matrix (matrix-num-rows mat) (matrix-num-cols mat) ls))
+
+(: mat-size (-> Mat Integer))
+(define (mat-size m)
+  (* (matrix-num-cols m) (matrix-num-rows m)))
+
 (: cost (-> neural-network (Listof Mat) (Listof Mat) Real))
 (define (cost nn input output)
 
@@ -125,7 +133,7 @@
      ]
     ))
 
-  (cost-rec nn input output 0))
+  (/ (cost-rec nn input output 0) (length input)))
 
 (: dcost-neuron
  (-> (Listof Real) Real Real (Listof Real) (Listof Real) Integer
@@ -155,6 +163,7 @@
     ))
 
 
+
 ;; (define (row-list->mat row-list)
   ;; (foldl 
 
@@ -171,17 +180,17 @@
      
      (let* ((ai (car ai-l))
             (diff (car diff-l))
-            (cur-row-l (matrix->list (matrix-row w-mat w-row)))
+            (cur-row-l (matrix->list (matrix-col w-mat (- w-col 1))))
             (neuron-bp
              (dcost-neuron cur-row-l diff ai ai-prev-l
                            next-diff-l
-                           (- w-col 1)))
+                           (- w-row 1)))
             (neuron-dcost (backprop-neuron-w-list neuron-bp))
             (neuron-diff-l (backprop-neuron-pd-prev neuron-bp))
-            (n-dcost-mat (list->matrix 1 w-col neuron-dcost)))
+            (n-dcost-mat (list->matrix w-row 1 neuron-dcost)))
        
-       (dcost-layer (- w-row 1) w-col
-                    (matrix-set-row w-mat w-row n-dcost-mat)
+       (dcost-layer w-row (- w-col 1)
+                    (matrix-set-col w-mat (- w-col 1) n-dcost-mat)
                     neuron-diff-l
                     (cdr ai-l) (cdr diff-l) ai-prev-l))
      ]
@@ -198,7 +207,7 @@
             (w-rows (matrix-num-rows cur-wmat))
             (w-cols (matrix-num-cols cur-wmat))
             (layer-bp
-             (dcost-layer (- w-rows 1) w-cols cur-wmat
+             (dcost-layer w-rows w-cols cur-wmat
                           (make-list w-rows 0)
                           (matrix->list (car forward-list))
                           diff-l
@@ -230,7 +239,7 @@
   (match input
     ['() wl-gd-acc]
     [l
-    (let* ((wl (neural-network-wl nn))
+    (let* ((wl (reverse (neural-network-wl nn)))
             (fwd-tree (forward (car input)
                              (neural-network-wl nn)
                              (neural-network-bl nn)))
@@ -243,16 +252,10 @@
      ]
     ))
 
-  (dcost-rec nn input output (make-zero-mat-list (neural-network-wl nn))))
-
-(: list-back->mat (-> Mat (Listof Real) Mat))
-(define (list-back->mat mat ls) 
-  (list->matrix (matrix-num-rows mat) (matrix-num-cols mat) ls))
-
-(: mat-size (-> Mat Integer))
-(define (mat-size m)
-  (* (matrix-num-cols m) (matrix-num-rows m)))
-
+  (map
+   (lambda ([m : Mat]) : Mat
+     (matrix-scale m (/ 1 (length input))))
+   (dcost-rec nn input output (make-zero-mat-list (reverse (neural-network-wl nn))))))
 #|
 (: mat-step (-> (Listof Mat) Real (Listof (Listof Mat))))
 (define (mat-step base-nn mat-list dstep)
@@ -336,23 +339,26 @@
        (let ((trained-nn
               (neural-network
                (map matrix- (neural-network-wl nn)
-                    (reverse
                      (map (lambda ([m : Mat]) : Mat
                             (matrix-scale m train-rate))
-                          (dcost nn in out))))
+                          (dcost nn in out)))
                (neural-network-bl nn))))
          
          (learn-rec trained-nn in out (- i 1)))
        ]
       ))
 
-  (learn-rec nn in out 1000))
+  (learn-rec nn in out (* 10 1000)))
               
 (define main
   (let* ((nn (make-nn nn-arch))
-         (trained-nn (learn nn input-data out-data)))
+         (trained-nn (learn nn input-data out-data))
+         )
     (begin
       (printf "~a\n" (cost nn input-data out-data))
-      (printf "~a\n" (cost trained-nn input-data out-data)))))
+      (printf "~a\n" (cost trained-nn input-data out-data))
+      ;; (forward (car input-data) (neural-network-wl nn) (neural-network-bl nn))
+      ;; (neural-network-wl nn)
+      )))
 
 main
