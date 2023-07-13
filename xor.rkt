@@ -132,9 +132,11 @@
         (dw2 (/ (- cost-w2+ start-cost) dstep))
         (db  (/ (- cost-b+ start-cost) dstep)))
 
+    (begin (printf "w1+ ~a\n" cost-w1+) 
+
     (neuron (- (neuron-w1 n) (* dw1 rate))
             (- (neuron-w2 n) (* dw2 rate))
-            (- (neuron-b n) (* db rate)))
+            (- (neuron-b n) (* db rate))))
   ))
 
 (: train-net (-> Data nxor Real nxor))

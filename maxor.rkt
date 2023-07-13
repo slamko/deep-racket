@@ -26,10 +26,11 @@
     (matrix [[0 0]])
     (matrix [[0 1]])
     (matrix [[1 0]])
-    (matrix [[1 1]])))
+    (matrix [[1 1]])
+    ))
 
 (: nn-arch (Listof Integer))
-(define nn-arch '(2 2 1))
+(define nn-arch '(2 3 5 1))
 
 (struct neural-network
   (
@@ -177,15 +178,14 @@
      (let* ((ai-prev (list-ref ai-prev-l i))
            (wi-pd (* 2 diff-i ai (- 1 ai) ai-prev))
            (last-pd-ai-prev (list-ref pd-prev-list-acc i))
-           (pd-ai-prev (* 2 diff-i ai (- 1 ai)
-                          (list-ref w-acc-l i)))
-           (wlist-upd (list-set w-acc-l i wi-pd))
+           (cur-w (list-ref w-acc-l i))
+           (pd-ai-prev (* 2 diff-i ai (- 1 ai) cur-w))
            )
        
        (begin
-         ;; (printf "Pd list~a\n" pd-ai-prev)
+         ;; (printf "Diff ~a, ai ~a, ai-prev ~a wi ~a\n" diff-i ai ai-prev wi-pd)
        (dcost-neuron
-        wlist-upd
+        (list-set w-acc-l i wi-pd)
         diff-i
         ai
         ai-prev-l
@@ -264,7 +264,7 @@
             )
        
        (begin
-         (printf "Cur diff~a\n" diff-l)
+         ;; (printf "Cur diff~a\n" diff-l)
          ;; (printf "Cur fwd list~a\n" (car forward-list))
          (dcost-nn (cdr forward-list) (cdr wmat-list)
                    (cons bp-wgrad-mat wgrad-mat-list-acc)
@@ -342,14 +342,15 @@
                      (neural-network-wl rate-nn))
                 (map matrix- (neural-network-bl nn)
                      (neural-network-bl rate-nn)))))
-
+         
          (begin
-           (print-nn new-nn)
+           ;; (printf "W1 ~a \n" (matrix-ref (car (neural-network-wl trained-nn)) 1 0))
+           
            (learn-rec new-nn in out (- i 1))))
        ]
       ))
 
-  (learn-rec nn in out (* 10)))
+  (learn-rec nn in out (* 10000)))
 
 (: perform (-> neural-network (Listof Mat) (Listof Mat) Number))
 (define (perform nn in out)
@@ -377,8 +378,8 @@
       ;; 0
       (printf "~a\n" (cost nn input-data out-data))
       (printf "~a\n" (cost trained-nn input-data out-data))
-      ;; (print-nn trained-nn)
-      ;; (perform trained-nn input-data out-data)
+       ;; (print-nn trained-nn)
+      (perform trained-nn input-data out-data)
       ;; (forward (car input-data) (neural-network-wl nn) (neural-network-bl nn))
       ;; (neural-network-wl grad)
       ;; (reverse (neural-network-wl nn))
