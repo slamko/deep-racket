@@ -200,6 +200,8 @@
     (perform train-data neural-network)
     (printf "-----------------------------------------\n")
     (let ((nn (learn train-data)))
+      ;; (printf "w1 ~a w2 ~a" (neuron-w1 (nxor-a nn))
+              ;; (neuron-w2 (nxor-a nn)))
       (printf "After training: \n")
       (perform train-data nn)
       (printf "\nModel error = ~a \n" (cost train-data nn)))))

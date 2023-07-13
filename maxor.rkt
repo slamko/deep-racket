@@ -5,6 +5,8 @@
 
 (require math)
 (require math/matrix)
+;; (require racket/struct)
+;; (require trace)
 
 (define-type Mat (Matrix Real))
 (define-type Weight Real)
@@ -34,6 +36,12 @@
    [wl : (Listof Mat)]
    [bl : (Listof Mat)]))
 
+(: print-nn (-> neural-network Void))
+(define (print-nn nn)
+   (printf "Weights list: \n~a \nBiases list: \n~a\n"
+              (neural-network-wl nn)
+              (neural-network-bl nn)))
+
 (struct backprop-nn
   (
    [wmat-list : (Listof (Matrix Weight))]
@@ -59,7 +67,7 @@
 
 (define out-data xor-output)
 
-(define train-rate 1e-1)
+(define train-rate 1)
 
 (: sigmoid (-> Real Real))
 (define (sigmoid x)
@@ -77,16 +85,27 @@
     (match wl
         ['() a-acc]
         [l
-        (let ((a (forward-layer in (car wl) (car bl))))
-        (forward-acc a (cdr wl) (cdr bl) (cons a a-acc)))
+         (let ((a (forward-layer in (car wl) (car bl))))
+           (forward-acc a (cdr wl) (cdr bl) (cons a a-acc)))
         ]
         ))
 
   (forward-acc in wl bl (list in)))
 
-(: randf (-> () Real))
-(define (randf)
+
+(: nn-forward (-> Mat neural-network (Listof Mat)))
+(define (nn-forward in nn)
+  (forward in
+           (neural-network-wl nn)
+           (neural-network-bl nn)))
+
+(: randf (-> Real Real))
+(define (randf r)
   (- (* (random) 2) 1))
+
+(: make-random-mat (-> Integer Integer Mat))
+(define (make-random-mat row col)
+  (matrix-map randf (make-matrix row col 0) ))
 
 (: make-nn (-> (Listof Integer) neural-network))
 (define (make-nn arch)
@@ -97,7 +116,7 @@
       [n
        (make-wl-rec
         (cdr n-arch)
-        (cons (make-matrix (car (cdr n-arch)) (car n-arch) (randf)) wl))
+        (cons (make-random-mat (car (cdr n-arch)) (car n-arch)) wl))
        ]
       ))
   
@@ -108,7 +127,7 @@
       [n
        (make-bl-rec
         (cdr n-arch)
-        (cons (make-matrix 1 (car n-arch) (randf)) bl))
+        (cons (make-random-mat 1 (car n-arch)) bl))
        ]
       ))
   
@@ -123,6 +142,13 @@
 (define (mat-size m)
   (* (matrix-num-cols m) (matrix-num-rows m)))
 
+(: nn-map (-> (-> Mat Mat)
+              neural-network neural-network))
+(define (nn-map proc nn)
+    (neural-network
+     (map proc (neural-network-wl nn))
+     (map proc (neural-network-bl nn))))
+
 (: cost (-> neural-network (Listof Mat) (Listof Mat) Real))
 (define (cost nn input output)
 
@@ -131,9 +157,7 @@
   (match input
     ['() err]
     [l
-     (let* ((nn-y (car (forward (car input)
-                             (neural-network-wl nn)
-                             (neural-network-bl nn))))
+     (let* ((nn-y (car (nn-forward (car input) nn)))
            (y (car output))
            (diff (apply + (matrix->list (matrix- nn-y y)))))
        (cost-rec nn (cdr input) (cdr output) (+ err (* diff diff))))
@@ -159,7 +183,7 @@
            )
        
        (begin
-         ;; (printf "~a\n" wlist-upd)
+         ;; (printf "Pd list~a\n" pd-ai-prev)
        (dcost-neuron
         wlist-upd
         diff-i
@@ -202,9 +226,8 @@
             (bias-gd (* 2 diff ai (- 1 ai))))
        
        (begin
-         ;; (printf "Current row: ~a\n" (- w-row 1))
-         ;; (printf "Current col: ~a\n" i)
-         ;; (printf "Current activation: ~a\n" ai-l)
+         ;; (printf "Current next: ~a\n" next-diff-l)
+         ;; (printf "Current activation: ~a\n" neuron-diff-l)
          (dcost-layer w-row (- i 1) w-col
                       (matrix-set-col w-mat (- i 1) n-dcost-mat)
                       (cons bias-gd b-acc-list)
@@ -241,11 +264,12 @@
             )
        
        (begin
-         ;; (printf "Cur wmat~a\n" cur-wmat)
+         (printf "Cur diff~a\n" diff-l)
+         ;; (printf "Cur fwd list~a\n" (car forward-list))
          (dcost-nn (cdr forward-list) (cdr wmat-list)
                    (cons bp-wgrad-mat wgrad-mat-list-acc)
                    (cons bp-bgrad-mat bgrad-mat-list-acc)
-                   bp-next-diff-l)))
+                   (map (lambda ([d : Real]) : Real (* d 1)) bp-next-diff-l))))
      ]
     ))
 
@@ -268,22 +292,21 @@
   (match input
     ['() bp-gd-acc]
     [l
-    (let* ((fwd-tree (forward (car input)
-                             (neural-network-wl nn)
-                             (neural-network-bl nn)))
+    (let* ((fwd-tree (nn-forward (car input) nn))
             (y (car output))
             (res-diff (matrix->list (matrix- (car fwd-tree) y)))
             (bp-gd (dcost-nn fwd-tree wl '() '() res-diff)))
 
+      (begin
+        ;; (printf "Ress diff ~a\n" res-diff)
       (dcost-rec nn (cdr input) (cdr output)
-                 wl
-                 (neural-network
-                  (map matrix+
-                       (neural-network-wl bp-gd)
-                       (neural-network-wl bp-gd-acc))
-                  (map matrix+
-                       (neural-network-bl bp-gd)
-                       (neural-network-bl bp-gd-acc)))))
+                 wl (neural-network
+                     (map matrix+
+                          (neural-network-wl bp-gd)
+                          (neural-network-wl bp-gd-acc))
+                     (map matrix+
+                          (neural-network-bl bp-gd)
+                          (neural-network-bl bp-gd-acc))))))
 
      ]
     ))
@@ -295,84 +318,9 @@
                               (make-zero-mat-list wl)
                               (make-zero-mat-list bl)))))
       
-      (neural-network
-       (map
-        (lambda ([m : Mat]) : Mat
-          (matrix-scale m (/ 1 (length input))))
-        (neural-network-wl grad-nn))
-       (map
-        (lambda ([m : Mat]) : Mat
-          (matrix-scale m (/ 1 (length input))))
-        (neural-network-bl grad-nn)))))
-#|
-(: mat-step (-> (Listof Mat) Real (Listof (Listof Mat))))
-(define (mat-step base-nn mat-list dstep)
-
-  (: step-rec
-     (-> (Listof Mat) (Listof (Listof Mat)) Integer (Listof (Listof Mat))))
-  (define (step-rec lm ml-acc mat-iter)
-    (match mat-iter
-      [-1 ml-acc]
-      [_
-       (let* ((cur-m (list-ref lm mat-iter))
-              (lr (matrix->list cur-m)))
-         
-         (: step-one-mat
-            (-> (Listof Real) (Listof (Listof Mat)) Integer
-                (Listof (Listof Mat))))
-         (define (step-one-mat ml acc iter)
-           (match iter
-             [-1 acc]
-             [i
-              (let* (
-                     (new-lr
-                      (list-set ml i (- (list-ref ml i) )))
-                     (new-ml
-                      (list-set mat-list mat-iter
-                                (list-back->mat cur-m new-lr))))
-
-                (step-one-mat ml (cons new-ml acc) (- i 1)))
-              ]
-             ))
-         
-           (step-rec
-            lm
-            (append (step-one-mat lr '() (- (mat-size cur-m) 1)) ml-acc)
-            (- mat-iter 1)))
-       ]
-      ))
-
-  (step-rec mat-list '() (- (length mat-list) 1)))
-|#
-
-;; (: mstep (-> Mat (Listof Mat)))
-;; (define (mstep m)
-  ;; (mat-step m dstep))
-
-;; (: finite-diff (-> (Listof 
-;; (define (finite-diff wl bl)
-  ;; (map mstep wl))
-#|
-(: diff (-> neural-network (Listof Mat) (Listof Real) (Listof (Listof Mat))))
-(define (diff nn in out)
-  (let ((wll (mat-step (neural-network-wl nn) dstep))
-        (bll (mat-step (neural-network-bl nn) dstep)))
-
-    (define (diff-rec wll bll nn-acc in out)
-      (match wll
-        ['() nn-acc]
-        [_
-         (let ((base-cost (cost nn in out))
-              (cost+
-               (cost
-                (neural-network
-                 (car wll)
-                 (neural-network-bl nn))
-                in out)))
-           (diff-rec (cdr wll) bll ()
-               
-    )
-  |#
+    (nn-map
+     (lambda ([m : Mat]) : Mat
+       (matrix-scale m (/ 1 (length input)))) grad-nn)))
 
 
 (: learn (-> neural-network (Listof Mat) (Listof Mat) neural-network))
@@ -385,23 +333,36 @@
       [0 nn]
       [_
        (let* ((trained-nn (dcost nn in out))
+              (rate-nn (nn-map
+                        (lambda ([m : Mat]) : Mat
+                          (matrix-scale m train-rate)) trained-nn))
               (new-nn
                (neural-network
                 (map matrix- (neural-network-wl nn)
-                     (map (lambda ([m : Mat]) : Mat
-                            (matrix-scale m train-rate))
-                          (neural-network-wl trained-nn)))
-                
+                     (neural-network-wl rate-nn))
                 (map matrix- (neural-network-bl nn)
-                     (map (lambda ([m : Mat]) : Mat
-                            (matrix-scale m train-rate))
-                          (neural-network-bl trained-nn))))))
-         
-         (learn-rec new-nn in out (- i 1)))
+                     (neural-network-bl rate-nn)))))
+
+         (begin
+           (print-nn new-nn)
+           (learn-rec new-nn in out (- i 1))))
        ]
       ))
 
-  (learn-rec nn in out (* 10 100)))
+  (learn-rec nn in out (* 10)))
+
+(: perform (-> neural-network (Listof Mat) (Listof Mat) Number))
+(define (perform nn in out)
+  (match in
+    ['() 0]
+    [_
+     (begin
+       (printf "Result: ~a; Expected: ~a\n"
+               (car (nn-forward (car in) nn))
+               (car out))
+       (perform nn (cdr in) (cdr out)))
+     ]
+    ))
               
 (define main
   (let* ((nn (make-nn nn-arch))
@@ -413,8 +374,11 @@
                    (neural-network-bl nn)))
          )
     (begin
+      ;; 0
       (printf "~a\n" (cost nn input-data out-data))
       (printf "~a\n" (cost trained-nn input-data out-data))
+      ;; (print-nn trained-nn)
+      ;; (perform trained-nn input-data out-data)
       ;; (forward (car input-data) (neural-network-wl nn) (neural-network-bl nn))
       ;; (neural-network-wl grad)
       ;; (reverse (neural-network-wl nn))
@@ -430,4 +394,4 @@
       ;; (neural-network-wl nn)
       )))
 
-main
+;; (trace main)
