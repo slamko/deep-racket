@@ -18,7 +18,7 @@
     (matrix [[0]])
     (matrix [[1]])
     (matrix [[1]])
-    (matrix [[1]])))
+    (matrix [[0]])))
 
 (: xor-input (Listof Mat))
 (define xor-input
@@ -131,8 +131,7 @@
        ]
       ))
   
-  (let ((rev-arch (reverse arch)))
-    (neural-network (make-wl-rec rev-arch '()) (make-bl-rec rev-arch '()))))
+  (neural-network (make-wl-rec arch '()) (make-bl-rec arch '())))
 
 (: list-back->mat (-> Mat (Listof Real) Mat))
 (define (list-back->mat mat ls) 
@@ -322,6 +321,21 @@
        (matrix-scale m (/ 1 (length input)))) grad-nn)))
 
 
+(define cmd-line
+  (command-line
+   #:program "deep.rkt"
+   #:args (iter . arch)
+   (cons iter arch)))
+
+(: iter-count Integer)
+(define iter-count
+  (let ((arg (car cmd-line)))
+    (if (string? arg)
+        (let ((num (string->number arg)))
+          (if (exact-integer? num) num 0 ))
+        0
+        )))
+
 (: learn (-> neural-network (Listof Mat) (Listof Mat) neural-network))
 (define (learn nn in out)
 
@@ -349,7 +363,7 @@
        ]
       ))
 
-  (learn-rec nn in out (* 10 )))
+  (learn-rec nn in out iter-count))
 
 (: perform (-> neural-network (Listof Mat) (Listof Mat) Number))
 (define (perform nn in out)
@@ -363,11 +377,30 @@
        (perform nn (cdr in) (cdr out)))
      ]
     ))
+
+(: get-arch (-> (Listof Any) (Listof Integer)))
+(define (get-arch cmd-args)
+  (foldl
+   (lambda ([u : (U Complex False)] [acc : (Listof Integer)])
+           : (Listof Integer)
+     (if (exact-integer? u)
+         (cons u acc)
+         acc))
+   '()
+   (map string->number
+        (map (lambda ([arg : Any]) : String
+               (if (string? arg)
+                   arg
+                   ""))
+               cmd-args))))
               
 (define main
-  (let* ((nn (make-nn nn-arch))
-         ;; (trained-nn (learn nn input-data out-data))
-         ;; (grad (dcost nn input-data out-data))
+  (let* (
+         ;; (arch (reverse nn-arch))
+         (arch (get-arch (cdr cmd-line)))
+         (nn (make-nn arch))
+         (trained-nn (learn nn input-data out-data))
+         (grad (dcost nn input-data out-data))
          (fwd-tree
           (forward (car input-data)
                    (neural-network-wl nn)
@@ -375,11 +408,9 @@
          )
     (begin
       ;; 0
-      ;; (printf "~a\n" (cost nn input-data out-data))
-      ;; (printf "~a\n" (cost trained-nn input-data out-data))
-       ;; (print-nn trained-nn)
-      ;; (perform trained-nn input-data out-data)
-      (print (current-command-line-arguments))
+      (printf "~a\n" (cost nn input-data out-data))
+      (printf "~a\n" (cost trained-nn input-data out-data))
+      (perform trained-nn input-data out-data)
       )))
 
 ;; (trace main)
