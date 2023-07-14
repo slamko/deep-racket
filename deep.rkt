@@ -27,6 +27,7 @@
          perform
          learn
          make-nn
+         print-nn
          cost)
 
 (define-type Mat (Matrix Real))
@@ -40,9 +41,14 @@
 
 (: print-nn (-> neural-network Void))
 (define (print-nn nn)
-   (printf "Weights list: \n~a \nBiases list: \n~a\n"
-              (neural-network-wl nn)
-              (neural-network-bl nn)))
+  (begin 
+    (printf "\nNN Weights:\n")
+    (map mat-print (neural-network-wl nn))
+
+    (printf "\nNN Biases:\n")
+    (map mat-print (neural-network-bl nn))
+    (printf "\n")
+    (void)))
 
 (struct backprop-nn
   (
@@ -67,6 +73,33 @@
 (define (sigmoid x)
   (/ 1 (+ 1 (exp (- x)))))
 
+(: nn-apply (-> (-> Mat Mat Mat) neural-network neural-network neural-network))
+(define (nn-apply proc nn1 nn2)
+  (neural-network
+   (map proc
+        (neural-network-wl nn1)
+        (neural-network-wl nn2))
+    (map proc
+        (neural-network-bl nn1)
+        (neural-network-bl nn2))))
+
+(: mat-print (-> Mat Void))
+(define (mat-print mat)
+
+  (: mat-print-rec (-> (Listof Mat) Void))
+  (define (mat-print-rec rows)
+    (match rows
+      ['() (void)]
+      [_
+       (printf "\t~a\n" (car rows))
+       (mat-print-rec (cdr rows))
+       ]
+      ))
+  
+  (let ((rows (matrix-rows mat)))
+    (mat-print-rec rows)))
+    
+ 
 (: forward-layer (-> Mat Mat Mat Mat))
 (define (forward-layer in w b)
   (matrix-map sigmoid (matrix+ (matrix* in w) b)))
@@ -95,11 +128,15 @@
 
 (: randf (-> Real Real))
 (define (randf r)
-  (- (* (random) 2) 1))
+  (- (* (random) 2) 1)
+  ;; 0
+  )
 
 (: make-random-mat (-> Integer Integer Mat))
 (define (make-random-mat row col)
-  (matrix-map randf (make-matrix row col 0) ))
+  (matrix-map randf
+              (make-matrix row col 0)
+              ))
 
 (: make-nn (-> (Listof Integer) neural-network))
 (define (make-nn arch)
@@ -176,7 +213,7 @@
            )
        
        (begin
-         ;; (printf "Diff ~a, ai ~a, ai-prev ~a wi ~a\n" diff-i ai ai-prev wi-pd)
+         ;; (printf "Diff ~a, \nai ~a, \nai-prev ~a \nwi ~a\n" diff-i ai ai-prev wi-pd)
        (dcost-neuron
         (list-set w-acc-l i wi-pd)
         diff-i
@@ -187,7 +224,6 @@
         (- i 1))))
      ]
     ))
-
 
 
 ;; (define (row-list->mat row-list)
@@ -208,7 +244,7 @@
      
      (let* ((ai (car ai-l))
             (diff (car diff-l))
-            (cur-row-l (matrix->list (matrix-col w-mat (- i 1))))
+            (cur-row-l (matrix->list (matrix-col w-mat i)))
             (neuron-bp
              (dcost-neuron cur-row-l diff ai ai-prev-l
                            next-diff-l
@@ -221,8 +257,9 @@
        (begin
          ;; (printf "Current next: ~a\n" next-diff-l)
          ;; (printf "Current activation: ~a\n" neuron-diff-l)
-         (dcost-layer w-row (- i 1) w-col
-                      (matrix-set-col w-mat (- i 1) n-dcost-mat)
+         ;; (printf "Layer current col: ~a\n" i)
+         (dcost-layer w-row (+ i 1) w-col
+                      (matrix-set-col w-mat i n-dcost-mat)
                       (cons bias-gd b-acc-list)
                       neuron-diff-l
                       (cdr ai-l) (cdr diff-l) ai-prev-l)))
@@ -245,7 +282,7 @@
             (w-rows (matrix-num-rows cur-wmat))
             (w-cols (matrix-num-cols cur-wmat))
             (layer-bp
-             (dcost-layer w-rows w-cols w-cols cur-wmat
+             (dcost-layer w-rows 0 w-cols cur-wmat
                           '()
                           (make-list w-rows 0)
                           (matrix->list (car forward-list))
@@ -257,7 +294,11 @@
             )
        
        (begin
-         ;; (printf "Cur diff~a\n" diff-l)
+         ;; (printf "BP grad w\n")
+         ;; (mat-print bp-wgrad-mat)
+         ;; (printf "BP grad b\n")
+         ;; (mat-print bp-bgrad-mat)
+         ;; (printf "\n")
          ;; (printf "Cur fwd list~a\n" (car forward-list))
          (dcost-nn (cdr forward-list) (cdr wmat-list)
                    (cons bp-wgrad-mat wgrad-mat-list-acc)
@@ -291,15 +332,10 @@
             (bp-gd (dcost-nn fwd-tree wl '() '() res-diff)))
 
       (begin
+         ;; (printf "Samples ~a\n" (car input))
         ;; (printf "Ress diff ~a\n" res-diff)
       (dcost-rec nn (cdr input) (cdr output)
-                 wl (neural-network
-                     (map matrix+
-                          (neural-network-wl bp-gd)
-                          (neural-network-wl bp-gd-acc))
-                     (map matrix+
-                          (neural-network-bl bp-gd)
-                          (neural-network-bl bp-gd-acc))))))
+                 wl (nn-apply matrix+ bp-gd bp-gd-acc))))
      ]
     ))
 
@@ -329,12 +365,7 @@
               (rate-nn (nn-map
                         (lambda ([m : Mat]) : Mat
                           (matrix-scale m rate)) trained-nn))
-              (new-nn
-               (neural-network
-                (map matrix- (neural-network-wl nn)
-                     (neural-network-wl rate-nn))
-                (map matrix- (neural-network-bl nn)
-                     (neural-network-bl rate-nn)))))
+              (new-nn (nn-apply matrix- nn rate-nn)))
          
          (begin
            ;; (printf "W1 ~a \n" (matrix-ref (car (neural-network-wl trained-nn)) 1 0))
@@ -370,4 +401,63 @@
 
     trained-nn
     ))
+
+(define xor-output
+  (list
+    (matrix [[0 0 0]])
+    (matrix [[0 0 1]])
+    (matrix [[0 0 1]])
+    (matrix [[0 1 0]])
+    (matrix [[0 0 1]])
+    (matrix [[0 1 0]])
+    (matrix [[0 1 0]])
+    (matrix [[0 1 1]])
+    (matrix [[0 0 1]])
+    (matrix [[0 1 0]])
+    (matrix [[0 1 0]])
+    (matrix [[0 1 1]])
+    (matrix [[0 1 0]])
+    (matrix [[0 1 1]])
+    (matrix [[0 1 1]])
+    (matrix [[1 0 0]])
+    ))
+
+(define xor-input
+  (list 
+    (matrix [[0 0 0 0]])
+    (matrix [[0 0 0 1]])
+    (matrix [[0 0 1 0]])
+    (matrix [[0 0 1 1]])
+    (matrix [[0 1 0 0]])
+    (matrix [[0 1 0 1]])
+    (matrix [[0 1 1 0]])
+    (matrix [[0 1 1 1]])
+    (matrix [[1 0 0 0]])
+    (matrix [[1 0 0 1]])
+    (matrix [[1 0 1 0]])
+    (matrix [[1 0 1 1]])
+    (matrix [[1 1 0 0]])
+    (matrix [[1 1 0 1]])
+    (matrix [[1 1 1 0]])
+    (matrix [[1 1 1 1]])
+    ))
+
+(define train-in xor-input)
+(define train-out xor-output)
+
+(define main
+  (let* (
+         (arch '(4 16 16 8 3))
+         ;; (arch (get-arch (cdr cmd-line)))
+         (nn (make-nn arch))
+         (trained-nn (learn nn train-in train-out 1 5000))
+         )
+    (begin
+      (perform nn s-in train-out)
+      (printf "NN ~a\n" (cost nn train-in train-out))
+      (printf "Trained NN ~a\n" (cost trained-nn train-in train-out))
+      (perform trained-nn train-in train-out)
+      ;; (print-nn (nn-apply matrix- trained-nn nn))
+      )))
+
 

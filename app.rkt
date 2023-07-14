@@ -7,10 +7,11 @@
 
 (define xor-output
   (list
-    (matrix [[0]])
-    (matrix [[1]])
-    (matrix [[1]])
-    (matrix [[0]])))
+    (matrix [[0 0]])
+    (matrix [[0 1]])
+    (matrix [[1 0]])
+    (matrix [[1 1]])
+    ))
 
 (define xor-input
   (list 
@@ -52,10 +53,15 @@
 
 (define main
   (let* ((arch (get-arch (cdr cmd-line)))
-        (trained-nn (train iter-count arch train-in train-out 1)))
+         (nn (make-nn (reverse arch)))
+        (trained-nn (learn nn train-in train-out 1 iter-count))
+         )
     (begin
+      (perform nn train-in train-out)
+      (printf "NN ~a\n" (cost nn train-in train-out))
       (printf "Trained NN ~a\n" (cost trained-nn train-in train-out))
       (perform trained-nn train-in train-out)
+      ;; (print-nn nn)
       )))
 
     
