@@ -125,7 +125,8 @@
        ]
       ))
   
-  (neural-network (make-wl-rec arch '()) (make-bl-rec arch '())))
+  (let ((rev-arch (reverse arch)))
+  (neural-network (make-wl-rec rev-arch '()) (make-bl-rec rev-arch '()))))
 
 (: list-back->mat (-> Mat (Listof Real) Mat))
 (define (list-back->mat mat ls) 
@@ -350,7 +351,7 @@
     ['() 0]
     [_
      (begin
-       (printf "Result: ~a; Expected: ~a\n"
+       (printf "NN's Result: ~a; \nExpected: ~a\n\n"
                (car (nn-forward (car in) nn))
                (car out))
        (perform nn (cdr in) (cdr out)))
