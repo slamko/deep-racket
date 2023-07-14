@@ -4,7 +4,7 @@ Implemented in Typed Racket for better performance with Matrix library
 Library part lives in deep.rkt file:
 
 To try it out in your racket code:
-```lisp
+#+begin_src lisp
 #!/usr/bin/env racket
 #lang racket
 
@@ -29,12 +29,12 @@ To try it out in your racket code:
 (define trained-nn (learn nn xor-input xor-output 1 (* 10 1000)))
 
 (perform trained-nn xor-input xor-output)
-```
+#+end_src
 
 app.rkt provides similar interface from the command line:
-```
+#+begin_src sh
 ./app.rkt 10000 -a 2 5 1
-```
+#+end_src
 
 
 
