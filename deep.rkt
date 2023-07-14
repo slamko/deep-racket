@@ -1,35 +1,37 @@
 #!/usr/bin/env racket
 
 #lang typed/racket
-;; #lang racket
 
-(require math)
+#|
+(require/typed math/matrix
+  [#:opaque Matrix matrix?]
+  [matrix+ (-> (Matrix Number) (Matrix Number) (Matrix Number))]
+  [matrix- (-> (Matrix Number) (Matrix Number) (Matrix Number))]
+  [matrix* (-> (Matrix Number) (Matrix Number) (Matrix Number))]
+  [matrix-map (-> (-> Number Number) (Matrix Number) (Matrix Number))]
+  [make-matrix (-> Integer Integer Number (Matrix Number))]
+  [list->matrix (-> Integer Integer (Listof Number) (Matrix Number))]
+  [matrix->list (-> (Matrix Number) (Listof Number))]
+  [matrix-num-rows (-> (Matrix Number) Index)]
+  [matrix-num-cols (-> (Matrix Number) Index)]
+  [matrix-set-col (-> (Matrix Number) Integer (Matrix Number) (Matrix Number))]
+  [matrix-set-row (-> (Matrix Number) Integer (Matrix Number) (Matrix Number))]
+  [matrix-row (-> (Matrix Number) Integer (Matrix Number))]
+  [matrix-col (-> (Matrix Number) Integer (Matrix Number))]
+  [matrix-scale (-> (Matrix Number) Number (Matrix Number))] 
+  )
+|#
+
 (require math/matrix)
-;; (require racket/struct)
-;; (require trace)
+(provide train
+         perform
+         learn
+         make-nn
+         cost)
 
 (define-type Mat (Matrix Real))
 (define-type Weight Real)
 (define-type Bias Real)
-
-(: xor-output (Listof Mat))
-(define xor-output
-  (list
-    (matrix [[0]])
-    (matrix [[1]])
-    (matrix [[1]])
-    (matrix [[0]])))
-
-(: xor-input (Listof Mat))
-(define xor-input
-  (list 
-    (matrix [[0 0]])
-    (matrix [[0 1]])
-    (matrix [[1 0]])
-    (matrix [[1 1]])))
-
-(: nn-arch (Listof Integer))
-(define nn-arch '(2 5 1))
 
 (struct neural-network
   (
@@ -60,14 +62,6 @@
    [w-list : (Listof Weight)]
    [pd-prev : (Listof Real)]
    ))
-
-;; (define train-data xor-train-data)
-
-(define input-data xor-input)
-
-(define out-data xor-output)
-
-(define train-rate 1)
 
 (: sigmoid (-> Real Real))
 (define (sigmoid x)
@@ -305,7 +299,6 @@
                      (map matrix+
                           (neural-network-bl bp-gd)
                           (neural-network-bl bp-gd-acc))))))
-
      ]
     ))
 
@@ -321,23 +314,9 @@
        (matrix-scale m (/ 1 (length input)))) grad-nn)))
 
 
-(define cmd-line
-  (command-line
-   #:program "deep.rkt"
-   #:args (iter . arch)
-   (cons iter arch)))
-
-(: iter-count Integer)
-(define iter-count
-  (let ((arg (car cmd-line)))
-    (if (string? arg)
-        (let ((num (string->number arg)))
-          (if (exact-integer? num) num 0 ))
-        0
-        )))
-
-(: learn (-> neural-network (Listof Mat) (Listof Mat) neural-network))
-(define (learn nn in out)
+(: learn (-> neural-network (Listof Mat) (Listof Mat) Real Integer
+             neural-network))
+(define (learn nn in out rate iter)
 
   (: learn-rec (-> neural-network (Listof Mat) (Listof Mat) Integer
                    neural-network))
@@ -348,7 +327,7 @@
        (let* ((trained-nn (dcost nn in out))
               (rate-nn (nn-map
                         (lambda ([m : Mat]) : Mat
-                          (matrix-scale m train-rate)) trained-nn))
+                          (matrix-scale m rate)) trained-nn))
               (new-nn
                (neural-network
                 (map matrix- (neural-network-wl nn)
@@ -363,7 +342,7 @@
        ]
       ))
 
-  (learn-rec nn in out iter-count))
+  (learn-rec nn in out iter))
 
 (: perform (-> neural-network (Listof Mat) (Listof Mat) Number))
 (define (perform nn in out)
@@ -378,39 +357,16 @@
      ]
     ))
 
-(: get-arch (-> (Listof Any) (Listof Integer)))
-(define (get-arch cmd-args)
-  (foldl
-   (lambda ([u : (U Complex False)] [acc : (Listof Integer)])
-           : (Listof Integer)
-     (if (exact-integer? u)
-         (cons u acc)
-         acc))
-   '()
-   (map string->number
-        (map (lambda ([arg : Any]) : String
-               (if (string? arg)
-                   arg
-                   ""))
-               cmd-args))))
-              
-(define main
-  (let* (
-         ;; (arch (reverse nn-arch))
-         (arch (get-arch (cdr cmd-line)))
-         (nn (make-nn arch))
-         (trained-nn (learn nn input-data out-data))
-         (grad (dcost nn input-data out-data))
-         (fwd-tree
-          (forward (car input-data)
-                   (neural-network-wl nn)
-                   (neural-network-bl nn)))
-         )
-    (begin
-      ;; 0
-      (printf "~a\n" (cost nn input-data out-data))
-      (printf "~a\n" (cost trained-nn input-data out-data))
-      (perform trained-nn input-data out-data)
-      )))
 
-;; (trace main)
+(: train (-> Integer (Listof Integer) (Listof Mat) (Listof Mat) Real
+             neural-network))
+(define (train iter-count arch data out train-rate)
+  (let*
+      (
+       (nn (make-nn arch))
+       (trained-nn (learn nn data out train-rate iter-count))
+       )
+
+    trained-nn
+    ))
+
