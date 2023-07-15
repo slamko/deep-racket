@@ -23,6 +23,7 @@
 |#
 
 (require math/matrix)
+(require json)
 
 (provide train
          perform
@@ -30,6 +31,10 @@
          make-nn
          print-nn
          cost
+         dump-nn
+         neural-network
+         neural-network-wl
+         neural-network-bl
          )
 
 (define-type Mat (Matrix Real))
@@ -54,7 +59,8 @@
 (struct neural-network
   (
    [wl : (Listof Mat)]
-   [bl : (Listof Mat)]))
+   [bl : (Listof Mat)]
+   ))
 
 (: print-nn (-> neural-network Void))
 (define (print-nn nn)
@@ -411,19 +417,38 @@
 
   (learn-rec nn data iter))
 
+(: dump-nn (-> neural-network (Listof (Listof (Listof Real)))))
+(define (dump-nn nn)
+  (cons
+   (map (lambda ([m : Mat]) : (Listof Real)
+          (matrix->list m)) (neural-network-wl nn))
+   (cons
+    (map (lambda ([m : Mat]) : (Listof Real)
+           (matrix->list m)) (neural-network-bl nn))
+    '())
+   ))
+
+;; (define (restore-nn 
+
+(: pretty-mat (-> Mat Integer (Matrix String)))
+(define (pretty-mat mat precision)
+  (matrix-map (lambda ([num : Real]) : String
+                (~r num #:precision precision)) mat))
+
 (: perform (-> neural-network TrainData Number))
 (define (perform nn data)
   (match data
     ['() 0]
     [_
      (begin
-       (printf "NN's Result: ~a; \nExpected: ~a\n\n"
-               (car (feed-forward-res (nn-forward (train-data-get-in data) nn)))
+       (printf "NN's Result:\n~a; \n\nExpected:\n~a\n\n"
+               (pretty-mat
+                (car (feed-forward-res
+                      (nn-forward (train-data-get-in data) nn))) 3)
                (train-data-get-out data))
        (perform nn (cdr data)))
      ]
     ))
-
 
 (: train (-> Integer (Listof Integer) TrainData Real
              neural-network))

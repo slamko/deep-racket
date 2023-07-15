@@ -5,6 +5,7 @@
 (require "deep.rkt")
 (require math/matrix)
 (require csv-reading)
+(require json)
 
 (define xor-data
   (list 
@@ -103,23 +104,82 @@
         (list->matrix 1 784 (cdr real-list))))))
    (make-csv-reader (open-input-file fname))))
 
+(define (wr-to-json expr fname)
+  (let ((json-out (open-output-file
+                   fname
+                   #:mode 'text
+                   #:exists 'append)))
+    (write-json expr json-out)))
+
+(define (nn->jsexpr nn)
+  (hash
+   'weights (map (lambda (m) (matrix->list m)) (neural-network-wl nn))
+   'biases  (map (lambda (m) (matrix->list m)) (neural-network-bl nn))
+   ))
+
+(define (save-to-json nn fname)
+  (let ((json-out (open-output-file
+                   fname
+                   #:mode 'text
+                   #:exists 'truncate)))
+
+    (begin 
+      (fprintf json-out (jsexpr->string (nn->jsexpr nn)))
+      (close-output-port json-out))
+    ))
+
+
+(define (restore-from-json nn fname)
+  (let* ((json-in (open-input-file fname))
+        (json-str (file->string fname))
+        (nn-hash (string->jsexpr json-str)))
+
+    ;; (for (((key val) (in-hash nn-hash)))
+      ;; (printf "~a = ~a~%" key val))
+
+    (neural-network
+     (map (lambda (l mat)
+            (list->matrix
+             (matrix-num-rows mat)
+             (matrix-num-cols mat)
+             l))
+
+          (hash-ref nn-hash 'weights)
+          (neural-network-wl nn))
+
+     (map (lambda (l mat)
+            (list->matrix
+             (matrix-num-rows mat)
+             (matrix-num-cols mat)
+             l))
+
+          (hash-ref nn-hash 'biases)
+          (neural-network-bl nn)))
+    ))
+
+(struct person (first-name last-name age country))
+(define (person->jsexpr p)
+  (hasheq 'first-name (person-first-name p)
+          'last-name (person-last-name p)
+          'age (person-age p)
+          'country (person-country p)))
+(define cky (person "Chris" "Jester-Young" 33 "New Zealand"))
 
 (define main
   (let* (
          (arch '(784 16 16 10))
-         ;; (arch '(2 3 1))
          ;; (arch (get-arch (cddr cmd-line)))
-         (nn (make-nn arch))
+         (nn (restore-from-json (make-nn arch) "save.json"))
          (train-data (parse-csv-train-data train-data-file-name)) 
          ;; (train-data xor-data)
-         (trained-nn (learn nn train-data 1 10))
+         (trained-nn (learn nn train-data 1 3))
          )
     (begin
+      ;; (perform trained-nn train-data)
       (printf "NN ~a\n" (cost nn train-data))
       (printf "Trained NN ~a\n" (cost trained-nn train-data))
-      ;; (perform trained-nn train-data)
-      ;; (print (csv->list (make-csv-reader (open-input-file train-data-file-name))))
-      ;; (print-nn (nn-apply matrix- trained-nn nn))
+
+      (save-to-json trained-nn "save.json")
       )))
 
 
