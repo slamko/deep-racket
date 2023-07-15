@@ -273,37 +273,37 @@
 
 (: grad-layer
    (-> Index Index (Matrix Weight)
-       (Listof Real) (Vectorof Real) (Listof Real)
+       (Vectorof Real) (Vectorof Real) (Vectorof Real)
        (Vectorof Real) (Vectorof Real) Integer backprop-layer))
-(define (grad-layer w-row w-col w-mat b-acc-list prev-diff-vec ai-l
+(define (grad-layer w-row w-col w-mat b-acc-vec prev-diff-vec ai-vec
                      diff-vec ai-prev-vec i)
-  (match ai-l
-    ['() (backprop-layer
+  (if (equal? i w-col) 
+    (backprop-layer
           prev-diff-vec
           w-mat
-          (list->matrix 1 w-col b-acc-list))
-         ]
-    [_
-     
-     (let* ((ai (car ai-l))
-            (diff (vector-ref diff-vec i))
-            (cur-row-vec (matrix->vector (matrix-col w-mat i)))
-            (neuron-bp
-             (grad-neuron cur-row-vec diff ai ai-prev-vec
-                           prev-diff-vec
-                           (- w-row 1)))
-            (neuron-grad (backprop-neuron-w-list neuron-bp))
-            (neuron-diff-vec (backprop-neuron-pd-prev neuron-bp))
-            (n-grad-mat (vector->matrix w-row 1 neuron-grad))
-            (bias-gd (* 2 diff ai (- 1 ai))))
-       
-       (begin
-         ;; (printf "Current activation: ~a\n" neuron-diff-l)
-         (grad-layer w-row w-col (matrix-set-col w-mat i n-grad-mat)
-                      (cons bias-gd b-acc-list) neuron-diff-vec
-                      (cdr ai-l) diff-vec ai-prev-vec (+ i 1))))
-       ]
-    ))
+          (->row-matrix b-acc-vec))
+
+    (let* ((ai (vector-ref ai-vec i))
+           (diff (vector-ref diff-vec i))
+           (cur-row-vec (matrix->vector (matrix-col w-mat i)))
+
+           (neuron-bp
+            (grad-neuron cur-row-vec diff ai ai-prev-vec
+                         prev-diff-vec
+                         (- w-row 1)))
+
+           (neuron-grad (backprop-neuron-w-list neuron-bp))
+           (neuron-diff-vec (backprop-neuron-pd-prev neuron-bp))
+           (n-grad-mat (vector->matrix w-row 1 neuron-grad))
+           (bias-gd (* 2 diff ai (- 1 ai))))
+      
+      (begin
+        ;; (printf "Current activation: ~a\n" neuron-diff-l)
+        (vector-set! b-acc-vec i bias-gd)
+        (grad-layer w-row w-col (matrix-set-col w-mat i n-grad-mat)
+                    b-acc-vec neuron-diff-vec
+                    ai-vec diff-vec ai-prev-vec (+ i 1)))))
+    )
 
 (: grad-nn
    (-> (Listof Mat) (Listof Mat) (Listof Mat) (Listof Mat) (Vectorof Real)
@@ -323,8 +323,8 @@
             (w-cols (matrix-num-cols cur-wmat))
             (layer-bp
              (grad-layer w-rows w-cols cur-wmat
-                          '() (make-vector w-rows 0)
-                          (matrix->list (car forward-list))
+                          (make-vector w-cols 0) (make-vector w-rows 0)
+                          (matrix->vector (car forward-list))
                           diff-vec
                           (matrix->vector (cadr forward-list))
                           0))
@@ -369,7 +369,7 @@
 
       (begin
         ;; (printf "Samples ~a\n" (car input))
-        (printf "Processed one sample\n")
+        ;; (printf "Processed one sample\n")
         (grad-rec nn (cdr data)
                    (nn-apply matrix+ bp-gd bp-gd-acc))))
      ]
