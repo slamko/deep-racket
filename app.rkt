@@ -106,16 +106,17 @@
 
 (define main
   (let* (
-         ;; (arch '(784 16 16 10))
-         (arch '(2 3 1))
+         (arch '(784 16 16 10))
+         ;; (arch '(2 3 1))
          ;; (arch (get-arch (cddr cmd-line)))
          (nn (make-nn arch))
-         ;; (train-data (parse-csv-train-data train-data-file-name)) 
-         (trained-nn (learn nn xor-data 1 1000))
+         (train-data (parse-csv-train-data train-data-file-name)) 
+         ;; (train-data xor-data)
+         (trained-nn (learn nn train-data 1 10))
          )
     (begin
-      (printf "NN ~a\n" (cost nn xor-data))
-      (printf "Trained NN ~a\n" (cost trained-nn xor-data))
+      (printf "NN ~a\n" (cost nn train-data))
+      (printf "Trained NN ~a\n" (cost trained-nn train-data))
       ;; (perform trained-nn train-data)
       ;; (print (csv->list (make-csv-reader (open-input-file train-data-file-name))))
       ;; (print-nn (nn-apply matrix- trained-nn nn))

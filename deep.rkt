@@ -82,15 +82,15 @@
 
 (struct backprop-layer
   (
-   [pd-prev : (Listof Real)]
+   [pd-prev : (Vectorof Real)]
    [w-mat : (Matrix Weight)]
    [b-mat : (Matrix Bias)]
    ))
 
 (struct backprop-neuron
   (
-   [w-list : (Listof Weight)]
-   [pd-prev : (Listof Real)]
+   [w-list : (Vectorof Weight)]
+   [pd-prev : (Vectorof Real)]
    ))
 
 (: sigmoid (-> Real Real))
@@ -198,7 +198,7 @@
   
   (let ((rev-arch (reverse arch)))
     (begin
-      (print (make-wl-rec rev-arch '()))
+      ;; (print (make-wl-rec rev-arch '()))
      (neural-network (make-wl-rec rev-arch '()) (make-bl-rec rev-arch '())))))
 
 (: list-back->mat (-> Mat (Listof Real) Mat))
@@ -237,76 +237,79 @@
      (length data)))
 
 (: grad-neuron
- (-> (Listof Real) Real Real (Listof Real) (Listof Real) Integer
+ (-> (Vectorof Real) Real Real (Vectorof Real) (Vectorof Real) Integer
      backprop-neuron))
-(define (grad-neuron w-acc-l diff-i ai ai-prev-l
-                      pd-prev-list-acc i)
-  (match i
-    [-1 (backprop-neuron w-acc-l pd-prev-list-acc)]
-    [_
-     (let* ((ai-prev (list-ref ai-prev-l i))
-           (wi-pd (* 2 diff-i ai (- 1 ai) ai-prev))
-           (last-pd-ai-prev (list-ref pd-prev-list-acc i))
-           (cur-w (list-ref w-acc-l i))
-           (pd-ai-prev (* 2 diff-i ai (- 1 ai) cur-w))
+(define (grad-neuron w-acc-vec diff-i ai ai-prev-vec
+                      pd-prev-vec-acc i)
+
+  (: grad-neuron-rec (-> Real Real (Vectorof Real) Integer Void))
+  (define (grad-neuron-rec diff-i ai ai-prev-vec i)
+    (match i
+      [-1 (void)]
+      [_
+       (let* ((ai-prev (vector-ref ai-prev-vec i))
+              (wi-pd (* 2 diff-i ai (- 1 ai) ai-prev))
+              (last-pd-ai-prev (vector-ref pd-prev-vec-acc i))
+              (cur-w (vector-ref w-acc-vec i))
+              (pd-ai-prev (* 2 diff-i ai (- 1 ai) cur-w))
            )
-       
-       (begin
-         ;; (printf "Diff ~a, \nai ~a, \nai-prev ~a \nwi ~a\n" diff-i ai ai-prev wi-pd)
-       (grad-neuron
-        (list-set w-acc-l i wi-pd)
-        diff-i
-        ai
-        ai-prev-l
-        (list-set pd-prev-list-acc i
-                  (+ pd-ai-prev last-pd-ai-prev))
-        (- i 1))))
-     ]
-    ))
+         
+         (begin
+           ;; (printf "Diff ~a, \nai ~a, \nai-prev ~a \nwi ~a\n" diff-i ai ai-prev wi-pd)
+           (vector-set! w-acc-vec i wi-pd)
+           (vector-set! pd-prev-vec-acc i
+                     (+ pd-ai-prev last-pd-ai-prev))
+           (grad-neuron-rec
+            diff-i
+            ai
+            ai-prev-vec
+            (- i 1))))
+       ]
+      ))
 
-
-;; (define (row-list->mat row-list)
-  ;; (foldl 
+  (begin
+    (grad-neuron-rec diff-i ai ai-prev-vec i)
+    (backprop-neuron w-acc-vec pd-prev-vec-acc)))
 
 (: grad-layer
    (-> Index Index (Matrix Weight)
-       (Listof Real) (Listof Real) (Listof Real) (Listof Real) (Listof Real)
-       Integer backprop-layer))
-(define (grad-layer w-row w-col w-mat b-acc-list next-diff-l ai-l
-                     diff-l ai-prev-l i)
+       (Listof Real) (Vectorof Real) (Listof Real)
+       (Vectorof Real) (Vectorof Real) Integer backprop-layer))
+(define (grad-layer w-row w-col w-mat b-acc-list prev-diff-vec ai-l
+                     diff-vec ai-prev-vec i)
   (match ai-l
     ['() (backprop-layer
-          next-diff-l
+          prev-diff-vec
           w-mat
           (list->matrix 1 w-col b-acc-list))
          ]
     [_
      
      (let* ((ai (car ai-l))
-            (diff (car diff-l))
-            (cur-row-l (matrix->list (matrix-col w-mat i)))
+            (diff (vector-ref diff-vec i))
+            (cur-row-vec (matrix->vector (matrix-col w-mat i)))
             (neuron-bp
-             (grad-neuron cur-row-l diff ai ai-prev-l
-                           next-diff-l
+             (grad-neuron cur-row-vec diff ai ai-prev-vec
+                           prev-diff-vec
                            (- w-row 1)))
             (neuron-grad (backprop-neuron-w-list neuron-bp))
-            (neuron-diff-l (backprop-neuron-pd-prev neuron-bp))
-            (n-grad-mat (list->matrix w-row 1 neuron-grad))
+            (neuron-diff-vec (backprop-neuron-pd-prev neuron-bp))
+            (n-grad-mat (vector->matrix w-row 1 neuron-grad))
             (bias-gd (* 2 diff ai (- 1 ai))))
        
        (begin
          ;; (printf "Current activation: ~a\n" neuron-diff-l)
          (grad-layer w-row w-col (matrix-set-col w-mat i n-grad-mat)
-                      (cons bias-gd b-acc-list) neuron-diff-l
-                      (cdr ai-l) (cdr diff-l) ai-prev-l (+ i 1))))
+                      (cons bias-gd b-acc-list) neuron-diff-vec
+                      (cdr ai-l) diff-vec ai-prev-vec (+ i 1))))
        ]
     ))
 
 (: grad-nn
-   (-> (Listof Mat) (Listof Mat) (Listof Mat) (Listof Mat) (Listof Real)
+   (-> (Listof Mat) (Listof Mat) (Listof Mat) (Listof Mat) (Vectorof Real)
        neural-network))
 (define (grad-nn forward-list wmat-list
-                  wgrad-mat-list-acc bgrad-mat-list-acc diff-l)
+                  wgrad-mat-list-acc bgrad-mat-list-acc diff-vec)
   (match forward-list
     [(list a)
      (neural-network
@@ -320,12 +323,12 @@
             (w-cols (matrix-num-cols cur-wmat))
             (layer-bp
              (grad-layer w-rows w-cols cur-wmat
-                          '() (make-list w-rows 0)
+                          '() (make-vector w-rows 0)
                           (matrix->list (car forward-list))
-                          diff-l
-                          (matrix->list (cadr forward-list))
+                          diff-vec
+                          (matrix->vector (cadr forward-list))
                           0))
-            (bp-next-diff-l (backprop-layer-pd-prev layer-bp))
+            (bp-prev-diff-vec (backprop-layer-pd-prev layer-bp))
             (bp-wgrad-mat (backprop-layer-w-mat layer-bp))
             (bp-bgrad-mat (backprop-layer-b-mat layer-bp))
             )
@@ -336,7 +339,7 @@
          (grad-nn (cdr forward-list) (cdr wmat-list)
                    (cons bp-wgrad-mat wgrad-mat-list-acc)
                    (cons bp-bgrad-mat bgrad-mat-list-acc)
-                   bp-next-diff-l)))
+                   bp-prev-diff-vec)))
      ]
     ))
 
@@ -361,11 +364,12 @@
            (fwd-res (car (feed-forward-res fwd-tree)))
            (fwd-wl (feed-forward-weights fwd-tree))
            (expected-res (train-data-get-out data))
-           (res-diff (matrix->list (matrix- fwd-res expected-res)))
+           (res-diff (matrix->vector (matrix- fwd-res expected-res)))
            (bp-gd (grad-nn (feed-forward-res fwd-tree) fwd-wl '() '() res-diff)))
 
       (begin
         ;; (printf "Samples ~a\n" (car input))
+        (printf "Processed one sample\n")
         (grad-rec nn (cdr data)
                    (nn-apply matrix+ bp-gd bp-gd-acc))))
      ]
